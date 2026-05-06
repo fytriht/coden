@@ -93,12 +93,6 @@ The VS Code patch writes one JSON object per line to:
 
 The app polls this file every 500ms. It starts from the current end of the file, so historical events are only used for the menu's recent-event display and are not replayed into active session state.
 
-Runtime diagnostics are written to:
-
-```text
-~/Library/Application Support/CodexStatusMonitor/app.log
-```
-
 Expected fields:
 
 ```json

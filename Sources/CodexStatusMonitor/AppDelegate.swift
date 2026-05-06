@@ -34,33 +34,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         tailer = EventTailer(fileURL: CodexStatusPaths.eventsFile) { [weak self] event, isReplay in
             Task { @MainActor in
                 guard let self else { return }
-                let before = self.store.aggregateState
-                let mapped = StatusStore.state(for: event)?.rawValue ?? "ignored"
                 self.store.apply(event, notify: !isReplay)
-                let after = self.store.aggregateState
-                if self.shouldLog(event: event, isReplay: isReplay, mapped: mapped, before: before, after: after) {
-                    self.appendLog("event replay=\(isReplay) type=\(event.eventType) conversationId=\(event.conversationId ?? "nil") requestType=\(event.requestType ?? "nil") status=\(event.status ?? "nil") mapped=\(mapped) aggregate=\(before.rawValue)->\(after.rawValue)")
-                }
             }
         }
         tailer?.start()
-    }
-
-    private func shouldLog(
-        event: CodexStatusEvent,
-        isReplay: Bool,
-        mapped: String,
-        before: CodexSessionState,
-        after: CodexSessionState
-    ) -> Bool {
-        if isReplay { return false }
-        if before != after { return true }
-        if mapped == CodexSessionState.waiting.rawValue { return true }
-        if event.eventType == "item/completed" { return true }
-        if event.eventType.hasPrefix("codex-status-monitor/") { return true }
-        if event.eventType.hasPrefix("codex/event/") { return true }
-        if event.eventType == "notifications/tasks/status" { return true }
-        return false
     }
 
     private func preloadRecentEvents() {
@@ -113,7 +90,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         menu.addItem(.separator())
         menu.addItem(action: "Install/Repair VSCode Patch", target: self, selector: #selector(installPatch))
         menu.addItem(action: "Open Notification Settings", target: self, selector: #selector(openNotificationSettings))
-        menu.addItem(action: "Send Test Notification", target: self, selector: #selector(sendTestNotification))
         menu.addItem(action: "Reset Status", target: self, selector: #selector(resetStatus))
         menu.addItem(.separator())
         menu.addItem(action: "Quit", target: self, selector: #selector(quit))
@@ -157,7 +133,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     private func notifyTurnCompleted(_ event: CodexStatusEvent) {
-        appendLog("notify candidate eventType=\(event.eventType) conversationId=\(event.conversationId ?? "nil") requestType=\(event.requestType ?? "nil") status=\(event.status ?? "nil")")
         let content = UNMutableNotificationContent()
         content.title = "Codex"
         content.body = "Codex 任务已完成"
@@ -173,13 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().add(request) { [weak self] error in
             if error != nil {
                 Task { @MainActor in
-                    self?.appendLog("notification add failed: \(error?.localizedDescription ?? "unknown")")
                     self?.refreshNotificationStatus()
-                }
-            } else {
-                Task { @MainActor in
-                    self?.appendLog("notification add succeeded")
-                    self?.logDeliveredNotificationsSoon()
                 }
             }
         }
@@ -189,7 +158,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { [weak self] granted, _ in
             Task { @MainActor in
                 self?.notificationStatusTitle = granted ? "Notifications: enabled" : "Notifications: disabled"
-                self?.appendLog("notification authorization request granted=\(granted)")
                 self?.refreshNotificationStatus()
             }
         }
@@ -198,10 +166,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private func refreshNotificationStatus() {
         UNUserNotificationCenter.current().getNotificationSettings { [weak self] settings in
             let authorizationStatus = settings.authorizationStatus
-            let alertSetting = settings.alertSetting
-            let soundSetting = settings.soundSetting
-            let notificationCenterSetting = settings.notificationCenterSetting
-            let lockScreenSetting = settings.lockScreenSetting
             Task { @MainActor in
                 switch authorizationStatus {
                 case .authorized, .ephemeral, .provisional:
@@ -213,7 +177,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 @unknown default:
                     self?.notificationStatusTitle = "Notifications: unknown"
                 }
-                self?.appendLog("notification settings authorization=\(authorizationStatus.rawValue) alert=\(alertSetting.rawValue) sound=\(soundSetting.rawValue) notificationCenter=\(notificationCenterSetting.rawValue) lockScreen=\(lockScreenSetting.rawValue)")
                 self?.refreshMenu()
             }
         }
@@ -230,47 +193,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
     }
 
-    @objc private func sendTestNotification() {
-        notifyTurnCompleted(CodexStatusEvent(
-            schemaVersion: 1,
-            timestamp: ISO8601DateFormatter.codexStatusFormatter().string(from: Date()),
-            extensionVersion: nil,
-            source: "app",
-            eventType: "test-notification",
-            conversationId: nil,
-            requestId: nil,
-            requestType: nil,
-            status: nil
-        ))
-    }
-
-    private func appendLog(_ message: String) {
-        let directory = CodexStatusPaths.appSupportDirectory
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let line = "\(ISO8601DateFormatter.codexStatusFormatter().string(from: Date())) \(message)\n"
-        let url = directory.appendingPathComponent("app.log")
-        if let data = line.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: url.path), let handle = try? FileHandle(forWritingTo: url) {
-                _ = try? handle.seekToEnd()
-                try? handle.write(contentsOf: data)
-                try? handle.close()
-            } else {
-                try? data.write(to: url)
-            }
-        }
-    }
-
-    private func logDeliveredNotificationsSoon() {
-        Task {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            let notifications = await UNUserNotificationCenter.current().deliveredNotifications()
-            let ids = notifications.map(\.request.identifier).joined(separator: ",")
-            let count = notifications.count
-            await MainActor.run { [weak self] in
-                self?.appendLog("delivered notifications count=\(count) ids=\(ids)")
-            }
-        }
-    }
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,

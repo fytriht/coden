@@ -84,12 +84,6 @@ The patch writes events to:
 
 The app polls this JSONL file every 500ms and updates menu bar state from newly appended events. On launch it only preloads the last 20 events for the `Recent events` menu; it does not replay old events into active session state.
 
-Runtime diagnostics are written to:
-
-```text
-~/Library/Application Support/CodexStatusMonitor/app.log
-```
-
 ## Patch Behavior
 
 The patcher modifies the installed VS Code extension bundle in place.
