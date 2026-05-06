@@ -12,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var pendingCompletionNotifications: [String: Task<Void, Never>] = [:]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        setupMainMenu()
         UNUserNotificationCenter.current().delegate = self
         requestNotificationAuthorization()
 
@@ -27,6 +28,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func applicationWillTerminate(_ notification: Notification) {
         socketServer?.stop()
         pendingCompletionNotifications.values.forEach { $0.cancel() }
+    }
+
+    private func setupMainMenu() {
+        let appMenu = NSMenu()
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(quitItem)
+        let appMenuItem = NSMenuItem()
+        appMenuItem.submenu = appMenu
+        let mainMenu = NSMenu()
+        mainMenu.addItem(appMenuItem)
+        NSApp.mainMenu = mainMenu
     }
 
     private func startSocketServer() {
