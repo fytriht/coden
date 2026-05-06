@@ -22,12 +22,21 @@ final class StatusStore {
         }
 
         let conversationId = event.conversationId ?? event.requestId ?? "unknown"
+        let prevState = sessions[conversationId]?.state
         if nextState == .idle {
+            if let prev = prevState {
+                log("Session \(conversationId): \(prev.rawValue) → idle")
+            }
             sessions.removeValue(forKey: conversationId)
             if notify && Self.isCompletion(event) {
+                log("Turn completed for conv=\(conversationId), scheduling notification")
                 onTurnCompleted?(event)
             }
         } else {
+            if prevState != nextState {
+                let from = prevState?.rawValue ?? "idle"
+                log("Session \(conversationId): \(from) → \(nextState.rawValue)")
+            }
             sessions[conversationId] = SessionSnapshot(
                 conversationId: conversationId,
                 state: nextState,
@@ -43,6 +52,7 @@ final class StatusStore {
     }
 
     func reset() {
+        log("StatusStore reset (cleared \(sessions.count) sessions)")
         sessions.removeAll()
         recentEvents.removeAll()
         onChange?()

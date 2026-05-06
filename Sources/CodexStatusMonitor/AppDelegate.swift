@@ -10,8 +10,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var patchStatus = PatchStatus(state: .noExtensionFound)
     private var notificationStatusTitle = "Notifications: checking"
     private var pendingCompletionNotifications: [String: Task<Void, Never>] = [:]
+    private var lastLoggedAggregateState: CodexSessionState = .idle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppLogger.shared.setup(logFile: CodexStatusPaths.logFile)
+        log("CodexStatusMonitor launched")
+
         setupMainMenu()
         UNUserNotificationCenter.current().delegate = self
         requestNotificationAuthorization()
@@ -21,11 +25,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         store.onRunningStarted = { [weak self] conversationId in self?.cancelPendingCompletionNotification(conversationId: conversationId) }
 
         patchStatus = patchInstaller.currentStatus()
+        log("Patch status: \(patchStatus.title)")
         startSocketServer()
         refreshMenu()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        log("CodexStatusMonitor terminating")
         socketServer?.stop()
         pendingCompletionNotifications.values.forEach { $0.cancel() }
     }
@@ -42,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     }
 
     private func startSocketServer() {
+        let sockPath = CodexStatusPaths.socketFile.path
         socketServer = EventSocketServer(socketURL: CodexStatusPaths.socketFile) { [weak self] event in
             Task { @MainActor in
                 guard let self else { return }
@@ -49,10 +56,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
             }
         }
         socketServer?.start()
+        log("Socket server started at \(sockPath)")
     }
 
     private func refreshMenu() {
-        statusItem.button?.title = "Codex: \(store.aggregateState.rawValue)"
+        let current = store.aggregateState
+        if current != lastLoggedAggregateState {
+            log("Aggregate state: \(lastLoggedAggregateState.rawValue) → \(current.rawValue)")
+            lastLoggedAggregateState = current
+        }
+        statusItem.button?.title = "Codex: \(current.rawValue)"
 
         let menu = NSMenu()
         menu.addItem(disabled: patchStatus.title)
@@ -81,10 +94,13 @@ menu.addItem(action: "Reset Status", target: self, selector: #selector(resetStat
     }
 
     @objc private func installPatch() {
+        log("Install/Repair patch requested")
         do {
             patchStatus = try patchInstaller.installOrRepair()
+            log("Patch result: \(patchStatus.title)")
         } catch {
             patchStatus = PatchStatus(state: .error(error.localizedDescription))
+            logError("Patch failed: \(error.localizedDescription)")
         }
         refreshMenu()
     }
@@ -112,6 +128,9 @@ menu.addItem(action: "Reset Status", target: self, selector: #selector(resetStat
     }
 
     private func cancelPendingCompletionNotification(conversationId: String) {
+        if pendingCompletionNotifications[conversationId] != nil {
+            log("Cancelled pending notification for \(short(conversationId)) (task restarted)")
+        }
         pendingCompletionNotifications[conversationId]?.cancel()
         pendingCompletionNotifications.removeValue(forKey: conversationId)
     }
@@ -129,8 +148,10 @@ menu.addItem(action: "Reset Status", target: self, selector: #selector(resetStat
             content: content,
             trigger: nil
         )
+        log("Sending completion notification for conv=\(event.conversationId ?? event.requestId ?? "unknown")")
         UNUserNotificationCenter.current().add(request) { [weak self] error in
-            if error != nil {
+            if let error {
+                logError("Notification delivery failed: \(error.localizedDescription)")
                 Task { @MainActor in
                     self?.refreshNotificationStatus()
                 }

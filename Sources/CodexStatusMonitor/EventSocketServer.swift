@@ -55,8 +55,14 @@ final class EventSocketServer: @unchecked Sendable {
                 bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
             }
         }
-        guard bindResult == 0 else { close(fd); return }
-        guard listen(fd, 10) == 0 else { close(fd); return }
+        guard bindResult == 0 else {
+            logError("Socket bind failed at \(path): errno=\(errno)")
+            close(fd); return
+        }
+        guard listen(fd, 10) == 0 else {
+            logError("Socket listen failed: errno=\(errno)")
+            close(fd); return
+        }
 
         listenFD = fd
 
@@ -71,11 +77,13 @@ final class EventSocketServer: @unchecked Sendable {
         let clientFD = accept(listenFD, nil, nil)
         guard clientFD >= 0 else { return }
 
+        log("Client connected (fd=\(clientFD))")
         clientBuffers[clientFD] = Data()
 
         let src = DispatchSource.makeReadSource(fileDescriptor: clientFD, queue: queue)
         src.setEventHandler { [weak self] in self?.readClient(fd: clientFD) }
         src.setCancelHandler { [weak self] in
+            log("Client disconnected (fd=\(clientFD))")
             close(clientFD)
             self?.clientBuffers.removeValue(forKey: clientFD)
             self?.clientSources.removeValue(forKey: clientFD)
@@ -102,7 +110,11 @@ final class EventSocketServer: @unchecked Sendable {
             data.removeSubrange(...newline)
             guard !line.isEmpty else { continue }
             if let event = try? JSONDecoder().decode(CodexStatusEvent.self, from: Data(line)) {
+                let conv = event.conversationId ?? event.requestId ?? "?"
+                log("Event received: \(event.eventType) conv=\(conv)")
                 onEvent(event)
+            } else {
+                logWarn("Failed to parse event JSON: \(String(data: Data(line), encoding: .utf8) ?? "<binary>")")
             }
         }
         clientBuffers[fd] = data
