@@ -8,6 +8,7 @@ final class StatusStore {
     var onChange: (() -> Void)?
     var onTurnCompleted: ((CodexStatusEvent) -> Void)?
     var onRunningStarted: ((String) -> Void)?
+    var onWaitingStarted: ((String) -> Void)?
 
     var aggregateState: CodexSessionState {
         sessions.values.map(\.state).max() ?? .idle
@@ -46,6 +47,9 @@ final class StatusStore {
             )
             if nextState == .running {
                 onRunningStarted?(conversationId)
+            }
+            if nextState == .waiting && prevState != .waiting {
+                onWaitingStarted?(conversationId)
             }
         }
         onChange?()

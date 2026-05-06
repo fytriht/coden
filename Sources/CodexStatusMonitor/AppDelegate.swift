@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         store.onChange = { [weak self] in self?.refreshMenu() }
         store.onTurnCompleted = { [weak self] event in self?.scheduleTurnCompletedNotification(event) }
         store.onRunningStarted = { [weak self] conversationId in self?.cancelPendingCompletionNotification(conversationId: conversationId) }
+        store.onWaitingStarted = { [weak self] conversationId in self?.notifyWaiting(conversationId: conversationId) }
 
         patchStatus = patchInstaller.currentStatus()
         log("Patch status: \(patchStatus.title)")
@@ -133,6 +134,30 @@ menu.addItem(action: "Reset Status", target: self, selector: #selector(resetStat
         }
         pendingCompletionNotifications[conversationId]?.cancel()
         pendingCompletionNotifications.removeValue(forKey: conversationId)
+    }
+
+    private func notifyWaiting(conversationId: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Codex"
+        content.body = "Codex 需要你的输入"
+        content.sound = .default
+        if #available(macOS 12.0, *) {
+            content.interruptionLevel = .timeSensitive
+        }
+        let request = UNNotificationRequest(
+            identifier: "codex-waiting-\(conversationId)-\(Date().timeIntervalSince1970)",
+            content: content,
+            trigger: nil
+        )
+        log("Sending waiting notification for conv=\(short(conversationId))")
+        UNUserNotificationCenter.current().add(request) { [weak self] error in
+            if let error {
+                logError("Notification delivery failed: \(error.localizedDescription)")
+                Task { @MainActor in
+                    self?.refreshNotificationStatus()
+                }
+            }
+        }
     }
 
     private func notifyTurnCompleted(_ event: CodexStatusEvent) {
