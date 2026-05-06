@@ -6,7 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let store = StatusStore()
     private let patchInstaller = PatchInstaller()
-    private var tailer: EventTailer?
+    private var socketServer: EventSocketServer?
     private var patchStatus = PatchStatus(state: .noExtensionFound)
     private var notificationStatusTitle = "Notifications: checking"
     private var pendingCompletionNotifications: [String: Task<Void, Never>] = [:]
@@ -20,40 +20,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         store.onRunningStarted = { [weak self] conversationId in self?.cancelPendingCompletionNotification(conversationId: conversationId) }
 
         patchStatus = patchInstaller.currentStatus()
-        preloadRecentEvents()
-        startTailer()
+        startSocketServer()
         refreshMenu()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        tailer?.stop()
+        socketServer?.stop()
         pendingCompletionNotifications.values.forEach { $0.cancel() }
     }
 
-    private func startTailer() {
-        tailer = EventTailer(fileURL: CodexStatusPaths.eventsFile) { [weak self] event, isReplay in
+    private func startSocketServer() {
+        socketServer = EventSocketServer(socketURL: CodexStatusPaths.socketFile) { [weak self] event in
             Task { @MainActor in
                 guard let self else { return }
-                self.store.apply(event, notify: !isReplay)
+                self.store.apply(event, notify: true)
             }
         }
-        tailer?.start()
-    }
-
-    private func preloadRecentEvents() {
-        guard let data = try? Data(contentsOf: CodexStatusPaths.eventsFile),
-              let text = String(data: data, encoding: .utf8) else {
-            return
-        }
-        let events = text
-            .split(separator: "\n")
-            .suffix(20)
-            .compactMap { line in
-                try? JSONDecoder().decode(CodexStatusEvent.self, from: Data(line.utf8))
-            }
-        for event in events {
-            store.recordRecent(event)
-        }
+        socketServer?.start()
     }
 
     private func refreshMenu() {

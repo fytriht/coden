@@ -61,7 +61,7 @@ struct DefaultHostPatchRule: PatchRule {
 
     private let anchor = #"handleMcpNotification(e){let r=this.extractConversationId(e.params);if(r)switch(e.method){case"codex/event/task_started":this.updateConversationStatus(r,2);break;case"codex/event/task_complete":this.updateConversationStatus(r,1);break;case"codex/event/turn_aborted":case"codex/event/error":case"codex/event/stream_error":this.updateConversationStatus(r,0);break;default:break}}"#
     private let marker = "__codexStatusMonitorRecord"
-    private let helperVersionMarker = "__codexStatusMonitorHelperVersion=2"
+    private let helperVersionMarker = "__codexStatusMonitorHelperVersion=3"
     private let messageCaseMarker = #"case"codex-status-monitor-event""#
 
     func supports(version: CodexVersion) -> Bool {
@@ -130,19 +130,25 @@ struct DefaultHostPatchRule: PatchRule {
     }
 
     private func helperSource(version: String) -> String {
-        #";(()=>{globalThis.__codexStatusMonitorHelperVersion=2;globalThis.__codexStatusMonitorRecord=function(e){try{const fs=require("node:fs"),os=require("node:os"),path=require("node:path");const dir=path.join(os.homedir(),"Library/Application Support/CodexStatusMonitor");fs.mkdirSync(dir,{recursive:true});const p=e&&typeof e==="object"?e.params||{}:{};const item=p.item||p;const eventType=e&&e.method?String(e.method):"unknown";const id=(...xs)=>xs.find(x=>typeof x==="string"&&x.length>0)??null;const event={schemaVersion:1,timestamp:new Date().toISOString(),extensionVersion:"\#(version)",source:"vscode-extension-host",eventType,conversationId:id(p.conversationId,p.threadId,p.id,item.conversationId,item.threadId),requestId:id(p.requestId,item.requestId,item.approvalRequestId,p.approvalRequestId,p.taskId,item.taskId),requestType:typeof p.type==="string"?p.type:typeof item.type==="string"?item.type:null,status:typeof p.status==="string"?p.status:typeof item.status==="string"?item.status:null};fs.appendFileSync(path.join(dir,"events.jsonl"),JSON.stringify(event)+"\n")}catch{}}})();"#
+        #";(()=>{globalThis.__codexStatusMonitorHelperVersion=3;try{const net=require("node:net"),os=require("node:os"),path=require("node:path");const sockPath=path.join(os.homedir(),"Library/Application Support/CodexStatusMonitor/events.sock");let _sock=null,_connecting=false;function _connect(){if(_connecting||(_sock&&!_sock.destroyed))return;_connecting=true;const s=net.createConnection(sockPath);s.on("connect",()=>{_sock=s;_connecting=false});s.on("error",()=>{_sock=null;_connecting=false;setTimeout(_connect,2000)});s.on("close",()=>{_sock=null;_connecting=false;setTimeout(_connect,2000)})}_connect();globalThis.__codexStatusMonitorRecord=function(e){try{const p=e&&typeof e==="object"?e.params||{}:{};const item=p.item||p;const eventType=e&&e.method?String(e.method):"unknown";const id=(...xs)=>xs.find(x=>typeof x==="string"&&x.length>0)??null;const event={schemaVersion:1,timestamp:new Date().toISOString(),extensionVersion:"\#(version)",source:"vscode-extension-host",eventType,conversationId:id(p.conversationId,p.threadId,p.id,item.conversationId,item.threadId),requestId:id(p.requestId,item.requestId,item.approvalRequestId,p.approvalRequestId,p.taskId,item.taskId),requestType:typeof p.type==="string"?p.type:typeof item.type==="string"?item.type:null,status:typeof p.status==="string"?p.status:typeof item.status==="string"?item.status:null};if(_sock&&!_sock.destroyed)_sock.write(JSON.stringify(event)+"\n")}catch{}}}catch{}})();"#
     }
 
     private func replacingExistingHelper(in source: String, version: String) -> String {
         let helper = helperSource(version: version)
-        guard
-            let start = source.range(of: ";(()=>{if(globalThis.__codexStatusMonitorRecord"),
-            let end = source.range(of: #"})();"use strict";"#)
-        else {
-            return helper + source
+        // Match any previously injected helper (v2 file-based or v3 socket-based)
+        let startSentinels = [
+            ";(()=>{globalThis.__codexStatusMonitorHelperVersion=",
+            ";(()=>{if(globalThis.__codexStatusMonitorRecord",
+        ]
+        let endSentinel = #";"use strict";"#
+        for startSentinel in startSentinels {
+            guard
+                let start = source.range(of: startSentinel),
+                let end = source.range(of: endSentinel, range: start.upperBound..<source.endIndex)
+            else { continue }
+            return source.replacingCharacters(in: start.lowerBound..<end.lowerBound, with: helper)
         }
-        let closureEnd = source.index(end.lowerBound, offsetBy: 5)
-        return source.replacingCharacters(in: start.lowerBound..<closureEnd, with: helper)
+        return helper + source
     }
 }
 

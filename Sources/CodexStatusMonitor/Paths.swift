@@ -9,4 +9,8 @@ enum CodexStatusPaths {
     static var eventsFile: URL {
         appSupportDirectory.appendingPathComponent("events.jsonl")
     }
+
+    static var socketFile: URL {
+        appSupportDirectory.appendingPathComponent("events.sock")
+    }
 }
