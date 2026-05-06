@@ -61,19 +61,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
 
         menu.addItem(.separator())
-        if store.recentEvents.isEmpty {
-            menu.addItem(disabled: "Recent events: none")
-        } else {
-            menu.addItem(disabled: "Recent events")
-            for event in store.recentEvents.prefix(5) {
-                menu.addItem(disabled: event.eventType.replacingOccurrences(of: "codex/event/", with: ""))
-            }
-        }
-
-        menu.addItem(.separator())
         menu.addItem(action: "Install/Repair VSCode Patch", target: self, selector: #selector(installPatch))
-        menu.addItem(action: "Open Notification Settings", target: self, selector: #selector(openNotificationSettings))
-        menu.addItem(action: "Reset Status", target: self, selector: #selector(resetStatus))
+menu.addItem(action: "Reset Status", target: self, selector: #selector(resetStatus))
         menu.addItem(.separator())
         menu.addItem(action: "Quit", target: self, selector: #selector(quit))
         statusItem.menu = menu
@@ -162,17 +151,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
                 }
                 self?.refreshMenu()
             }
-        }
-    }
-
-    @objc private func openNotificationSettings() {
-        let urls = [
-            "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
-            "x-apple.systempreferences:com.apple.preference.notifications"
-        ]
-        for rawURL in urls {
-            guard let url = URL(string: rawURL), NSWorkspace.shared.open(url) else { continue }
-            return
         }
     }
 
