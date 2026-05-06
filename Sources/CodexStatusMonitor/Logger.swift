@@ -1,4 +1,7 @@
 import Foundation
+import OSLog
+
+private let osLog = Logger(subsystem: "com.zhangzhi.CodexStatusMonitor", category: "app")
 
 final class AppLogger: @unchecked Sendable {
     static let shared = AppLogger()
@@ -42,6 +45,14 @@ final class AppLogger: @unchecked Sendable {
     }
 
     func write(_ level: String, _ message: String) {
+        // Write to unified logging (Console.app)
+        switch level {
+        case "WARN":  osLog.warning("\(message, privacy: .public)")
+        case "ERROR": osLog.error("\(message, privacy: .public)")
+        default:      osLog.info("\(message, privacy: .public)")
+        }
+
+        // Write to file
         let timestamp = dateFormatter.string(from: Date())
         let line = "[\(timestamp)] [\(level)] \(message)\n"
         guard let data = line.data(using: .utf8) else { return }
