@@ -60,14 +60,15 @@ Current rule types:
 - `DefaultHostPatchRule`
 - `PendingRequestWebviewPatchRule`
 
-When a new VS Code extension version appears:
+When a new VS Code extension version changes structure enough to break patching:
 
-1. Add the unpacked VSIX or extension directory under `references/vsix-history`.
-2. Inspect the new `extension/out/extension.js`.
-3. Prefer a stable host event hook before adding webview-specific logic.
-4. If the host hook is not enough, add a version-range webview rule.
-5. Extend tests so the new version is covered by `PatchRuleTests`.
-6. Run:
+1. Add the unpacked VSIX or extension directory under `Tests/Fixtures/vsix`.
+2. Keep only the files needed by `PatchRuleTests`: `extension/package.json`, `extension/out/extension.js`, and the specific `extension/webview/assets/*.js` bundle that contains the webview patch anchor.
+3. Inspect the new `extension/out/extension.js`.
+4. Prefer a stable host event hook before adding webview-specific logic.
+5. If the host hook is not enough, add a version-range webview rule.
+6. Extend tests so the new version is covered by `PatchRuleTests`.
+7. Run:
 
 ```bash
 swift test
@@ -165,6 +166,6 @@ The app delays completion notification delivery briefly and cancels the pending 
 - Run `swift build`.
 - Run `swift test`.
 - Run `scripts/build-app.sh` when bundle metadata or app packaging changes.
-- If patch logic changed, test against all versions in `references/vsix-history`.
+- If patch logic changed, test against all versions in `Tests/Fixtures/vsix`.
 - Update `README.md` if user-facing behavior changed.
 - Update this file if contributor workflow changed.

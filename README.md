@@ -161,7 +161,7 @@ Current test coverage includes:
 - command/reasoning/user message completion edge cases
 - turn completion callback
 - JSONL polling for events appended after app startup
-- patch rule selection across `references/vsix-history`
+- patch rule selection across VSIX fixtures in `Tests/Fixtures/vsix`
 - host patch idempotence on a temporary copied extension
 
 ## Repository Layout

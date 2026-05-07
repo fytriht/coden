@@ -2,9 +2,9 @@ import XCTest
 @testable import CodexStatusMonitor
 
 final class PatchRuleTests: XCTestCase {
-    func testHistoricalVersionsSelectPatchRules() throws {
+    func testFixtureVersionsSelectPatchRules() throws {
         let registry = PatchRuleRegistry()
-        let roots = try historicalExtensionRoots()
+        let roots = try fixtureExtensionRoots()
         XCTAssertFalse(roots.isEmpty)
 
         for root in roots {
@@ -19,7 +19,7 @@ final class PatchRuleTests: XCTestCase {
     }
 
     func testHostPatchIsIdempotentOnTemporaryCopy() throws {
-        let sourceRoot = try XCTUnwrap(historicalExtensionRoots().first)
+        let sourceRoot = try XCTUnwrap(fixtureExtensionRoots().first)
         let tempRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("codex-status-monitor-tests-\(UUID().uuidString)", isDirectory: true)
             .appendingPathComponent("extension", isDirectory: true)
@@ -45,9 +45,9 @@ final class PatchRuleTests: XCTestCase {
         XCTAssertEqual(once, twice)
     }
 
-    private func historicalExtensionRoots() throws -> [URL] {
+    private func fixtureExtensionRoots() throws -> [URL] {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("references/vsix-history", isDirectory: true)
+            .appendingPathComponent("Tests/Fixtures/vsix", isDirectory: true)
         let entries = try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey])
         return entries
             .filter { $0.lastPathComponent.hasPrefix("openai.chatgpt-") }
