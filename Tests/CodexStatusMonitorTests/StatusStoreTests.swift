@@ -45,31 +45,45 @@ final class StatusStoreTests: XCTestCase {
         XCTAssertTrue(store.recentEvents.isEmpty)
     }
 
-    func testCurrentExtensionEventNamesDriveState() {
+    func testFallbackTurnLifecycleForLightweightChat() {
         let store = StatusStore()
         var completed = false
         store.onTurnCompleted = { _ in completed = true }
+
+        store.apply(event("turn/started", conversationId: "a"))
+        XCTAssertEqual(store.aggregateState, .running)
 
         store.apply(event("item/agentMessage/delta", conversationId: "a"))
         XCTAssertEqual(store.aggregateState, .running)
 
-        store.apply(event("item/started", conversationId: "a", requestType: "commandExecution", status: "inProgress"))
-        XCTAssertEqual(store.aggregateState, .running)
-
         store.apply(event("item/completed", conversationId: "a", requestType: "agentMessage"))
+        XCTAssertEqual(store.aggregateState, .running)
+        XCTAssertFalse(completed)
+
+        store.apply(event("turn/completed", conversationId: "a"))
         XCTAssertEqual(store.aggregateState, .idle)
         XCTAssertTrue(completed)
     }
 
-    func testCommandCompletionKeepsTurnRunningWithoutCompletionCallback() {
+    func testCommandItemDoesNotStartTaskFromIdle() {
+        let store = StatusStore()
+
+        store.apply(event("item/started", conversationId: "a", requestType: "commandExecution", status: "inProgress"))
+        XCTAssertEqual(store.aggregateState, .idle)
+    }
+
+    func testItemCompletionsDoNotCompleteRunningTask() {
         let store = StatusStore()
         var completed = false
         store.onTurnCompleted = { _ in completed = true }
 
-        store.apply(event("item/started", conversationId: "a", requestType: "commandExecution", status: "inProgress"))
+        store.apply(event("codex/event/task_started", conversationId: "a"))
         XCTAssertEqual(store.aggregateState, .running)
 
         store.apply(event("item/completed", conversationId: "a", requestType: "commandExecution", status: "completed"))
+        XCTAssertEqual(store.aggregateState, .running)
+
+        store.apply(event("item/completed", conversationId: "a", requestType: "agentMessage"))
         XCTAssertEqual(store.aggregateState, .running)
         XCTAssertFalse(completed)
     }
@@ -77,17 +91,17 @@ final class StatusStoreTests: XCTestCase {
     func testReasoningCompletionKeepsTurnRunning() {
         let store = StatusStore()
 
-        store.apply(event("item/started", conversationId: "a", requestType: "reasoning"))
+        store.apply(event("codex/event/task_started", conversationId: "a"))
         XCTAssertEqual(store.aggregateState, .running)
 
         store.apply(event("item/completed", conversationId: "a", requestType: "reasoning"))
         XCTAssertEqual(store.aggregateState, .running)
     }
 
-    func testUserMessageCompletionDoesNotClearRunningTurn() {
+    func testUserMessageCompletionDoesNotClearRunningTask() {
         let store = StatusStore()
 
-        store.apply(event("turn/started", conversationId: "a"))
+        store.apply(event("codex/event/task_started", conversationId: "a"))
         XCTAssertEqual(store.aggregateState, .running)
 
         store.apply(event("item/completed", conversationId: "a", requestType: "userMessage"))
@@ -103,6 +117,42 @@ final class StatusStoreTests: XCTestCase {
         store.apply(event("codex/event/task_complete", conversationId: "a"))
 
         XCTAssertTrue(completed)
+    }
+
+    func testTurnCompletedDoesNotCompleteRunningTask() {
+        let store = StatusStore()
+        var completed = false
+        store.onTurnCompleted = { _ in completed = true }
+
+        store.apply(event("codex/event/task_started", conversationId: "a"))
+        store.apply(event("turn/completed", conversationId: "a"))
+
+        XCTAssertEqual(store.aggregateState, .running)
+        XCTAssertFalse(completed)
+    }
+
+    func testTaskStatusCompletedCompletesImmediately() {
+        let store = StatusStore()
+        var completed = false
+        store.onTurnCompleted = { _ in completed = true }
+
+        store.apply(event("notifications/tasks/status", conversationId: "a", status: "working"))
+        store.apply(event("notifications/tasks/status", conversationId: "a", status: "completed"))
+
+        XCTAssertEqual(store.aggregateState, .idle)
+        XCTAssertTrue(completed)
+    }
+
+    func testActivityAfterWaitingResumesRunning() {
+        let store = StatusStore()
+
+        store.apply(event("codex/event/task_started", conversationId: "a"))
+        store.apply(event("codex/event/exec_approval_request", conversationId: "a", requestType: "exec"))
+        XCTAssertEqual(store.aggregateState, .waiting)
+
+        store.apply(event("item/started", conversationId: "a", requestType: "commandExecution", status: "inProgress"))
+
+        XCTAssertEqual(store.aggregateState, .running)
     }
 
     private func event(

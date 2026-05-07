@@ -114,6 +114,11 @@ Patch event coverage includes:
 - `codex/event/exec_approval_request`
 - `codex/event/apply_patch_approval_request`
 - `codex/event/elicitation_request`
+- MCP task status `working`
+- MCP task status `completed`
+- MCP task status `input_required`
+- MCP task status `failed`
+- MCP task status `cancelled`
 - `turn/started`
 - `turn/completed`
 - `item/started`
@@ -121,11 +126,10 @@ Patch event coverage includes:
 - `item/reasoning/textDelta`
 - `item/reasoning/summaryTextDelta`
 - `item/plan/delta`
-- `item/completed` for final `agentMessage` completion
-- MCP task status `input_required`
+- `item/completed`
 - webview pending request fallback for plan confirmation and similar UI prompts
 
-`item/completed` events for `userMessage`, `commandExecution`, and `reasoning` are not treated as final turn completion. This avoids clearing `running` or firing a completion notification while Codex is still executing follow-up work.
+Task-level lifecycle events start or end coding tasks when they are present. Lightweight chat turns can omit those task-level events, so `turn/started` and assistant/reasoning deltas start a fallback turn session, and `turn/completed` ends it. Once a session has task-level lifecycle, `turn/*` and `item/*` events are treated as subordinate activity; they do not clear `running` or fire completion notifications. After a waiting prompt, subsequent item activity can move that same session back to `running`.
 
 ## State Semantics
 
@@ -137,14 +141,13 @@ waiting > running > idle
 
 `waiting` means at least one active session is blocked on user action, including approval requests, plan confirmation, plan mode choices, or other pending request UI.
 
-Completion notifications are sent for final turn completion candidates only:
+Completion notifications are sent immediately when the active lifecycle completes:
 
 - `codex/event/task_complete`
-- `turn/completed`
-- `item/completed` with `requestType == "agentMessage"`
 - `notifications/tasks/status` with `status == "completed"`
+- `turn/completed` for sessions that never received task-level lifecycle events
 
-Notifications are delayed briefly and cancelled if the same conversation starts running again before delivery. This filters out intermediate completion-looking events in multi-step turns.
+Error, abort, failed, and cancelled events clear the session state without sending a completion notification.
 
 ## Test
 
@@ -157,9 +160,9 @@ Current test coverage includes:
 - single-session state transitions
 - multi-session aggregation priority
 - `input_required` mapping to `waiting`
-- current extension `item/*` event names
-- command/reasoning/user message completion edge cases
-- turn completion callback
+- task-level start/completion boundaries
+- `turn/*` and `item/*` events not completing tasks
+- activity after waiting resuming `running`
 - JSONL polling for events appended after app startup
 - patch rule selection across VSIX fixtures in `Tests/Fixtures/vsix`
 - host patch idempotence on a temporary copied extension

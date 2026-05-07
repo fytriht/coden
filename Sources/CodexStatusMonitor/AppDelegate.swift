@@ -9,7 +9,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var socketServer: EventSocketServer?
     private var patchStatus = PatchStatus(state: .noExtensionFound)
     private var notificationStatusTitle = "Notifications: checking"
-    private var pendingCompletionNotifications: [String: Task<Void, Never>] = [:]
     private var lastLoggedAggregateState: CodexSessionState = .idle
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -21,8 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         requestNotificationAuthorization()
 
         store.onChange = { [weak self] in self?.refreshMenu() }
-        store.onTurnCompleted = { [weak self] event in self?.scheduleTurnCompletedNotification(event) }
-        store.onRunningStarted = { [weak self] conversationId in self?.cancelPendingCompletionNotification(conversationId: conversationId) }
+        store.onTurnCompleted = { [weak self] event in self?.notifyTurnCompleted(event) }
         store.onWaitingStarted = { [weak self] conversationId in self?.notifyWaiting(conversationId: conversationId) }
 
         PatchConfigLoader.refreshInBackground()
@@ -35,7 +33,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func applicationWillTerminate(_ notification: Notification) {
         log("CodexStatusMonitor terminating")
         socketServer?.stop()
-        pendingCompletionNotifications.values.forEach { $0.cancel() }
     }
 
     private func setupMainMenu() {
@@ -89,7 +86,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         menu.addItem(.separator())
         menu.addItem(action: "Install/Repair VSCode Patch", target: self, selector: #selector(installPatch))
-menu.addItem(action: "Reset Status", target: self, selector: #selector(resetStatus))
+        menu.addItem(action: "Reset Status", target: self, selector: #selector(resetStatus))
         menu.addItem(.separator())
         menu.addItem(action: "Quit", target: self, selector: #selector(quit))
         statusItem.menu = menu
@@ -113,28 +110,6 @@ menu.addItem(action: "Reset Status", target: self, selector: #selector(resetStat
 
     @objc private func quit() {
         NSApplication.shared.terminate(nil)
-    }
-
-    private func scheduleTurnCompletedNotification(_ event: CodexStatusEvent) {
-        let conversationId = event.conversationId ?? event.requestId ?? "unknown"
-        pendingCompletionNotifications[conversationId]?.cancel()
-        pendingCompletionNotifications[conversationId] = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                guard let self else { return }
-                self.pendingCompletionNotifications.removeValue(forKey: conversationId)
-                self.notifyTurnCompleted(event)
-            }
-        }
-    }
-
-    private func cancelPendingCompletionNotification(conversationId: String) {
-        if pendingCompletionNotifications[conversationId] != nil {
-            log("Cancelled pending notification for \(short(conversationId)) (task restarted)")
-        }
-        pendingCompletionNotifications[conversationId]?.cancel()
-        pendingCompletionNotifications.removeValue(forKey: conversationId)
     }
 
     private func notifyWaiting(conversationId: String) {
