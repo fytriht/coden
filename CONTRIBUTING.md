@@ -114,13 +114,13 @@ Before changing patch logic, verify:
 
 ## Event Contract
 
-The VS Code patch writes one JSON object per line to:
+The VS Code patch sends one JSON object per line to the app over a local Unix domain socket:
 
 ```text
-~/Library/Application Support/CodexStatusMonitor/events.jsonl
+~/Library/Application Support/CodexStatusMonitor/events.sock
 ```
 
-The app polls this file every 500ms. It starts from the current end of the file, so historical events are only used for the menu's recent-event display and are not replayed into active session state.
+The app listens on this socket while it is running. Events are transient: historical events are not persisted or replayed into active session state.
 
 Expected fields:
 

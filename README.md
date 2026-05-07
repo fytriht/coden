@@ -76,13 +76,13 @@ If notifications do not appear:
 3. Click `Install/Repair VSCode Patch`.
 4. Reload the VS Code window or restart VS Code so the extension host reloads.
 
-The patch writes events to:
+The patch sends newline-delimited JSON events to the app over a local Unix domain socket:
 
 ```text
-~/Library/Application Support/CodexStatusMonitor/events.jsonl
+~/Library/Application Support/CodexStatusMonitor/events.sock
 ```
 
-The app polls this JSONL file every 500ms and updates menu bar state from newly appended events. On launch it only preloads the last 20 events for the `Recent events` menu; it does not replay old events into active session state.
+The app listens on this socket while it is running and updates menu bar state from newly received events. It does not persist or replay historical events.
 
 ## Patch Behavior
 
@@ -163,7 +163,7 @@ Current test coverage includes:
 - task-level start/completion boundaries
 - `turn/*` and `item/*` events not completing tasks
 - activity after waiting resuming `running`
-- JSONL polling for events appended after app startup
+- Unix socket event ingestion, including partial lines and multiple clients
 - patch rule selection across VSIX fixtures in `Tests/Fixtures/vsix`
 - host patch idempotence on a temporary copied extension
 
@@ -172,7 +172,7 @@ Current test coverage includes:
 ```text
 Sources/CodexStatusMonitor/
   AppDelegate.swift          Menu bar UI and app lifecycle
-  EventTailer.swift          JSONL file tailing
+  EventSocketServer.swift    Unix socket event ingestion
   ExtensionLocator.swift     VS Code extension discovery
   Models.swift               Shared state/event models
   PatchInstaller.swift       Patch orchestration
@@ -181,7 +181,7 @@ Sources/CodexStatusMonitor/
   StatusStore.swift          State reducer and aggregation
 
 Tests/CodexStatusMonitorTests/
-  EventTailerTests.swift
+  EventSocketServerTests.swift
   PatchRuleTests.swift
   StatusStoreTests.swift
 
@@ -193,4 +193,4 @@ scripts/
 
 - VS Code extension updates replace the patched bundle. Run `Install/Repair VSCode Patch` again after extension upgrades.
 - If state looks stale, use `Reset Status` from the menu.
-- The app currently stores state in memory and reconstructs future state from new events only.
+- The app currently stores state in memory and updates future state from newly received events only.
