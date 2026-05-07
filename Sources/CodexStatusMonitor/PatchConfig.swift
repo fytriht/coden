@@ -115,6 +115,7 @@ enum PatchConfigLoader {
                                 functionEntryAnchor: nil,
                                 messageCaseInsertAnchor: nil,
                                 primaryAnchors: [
+                                    #"function dH(e){let t=(0,$.c)(23),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#,
                                     #"function DH(e){let t=(0,$.c)(23),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#,
                                     #"function Rq(e){let t=(0,Q.c)(23),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#,
                                     #"function Rq(e){let t=(0,Q.c)(21),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#

@@ -176,9 +176,15 @@ struct WebviewPendingRequestRule: PatchRule {
     private let primaryAnchors: [String]
     private let fallbackAnchor: String?
     private let bridgeExpression: String
+    private static let defaultPrimaryAnchors = [
+        #"function dH(e){let t=(0,$.c)(23),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#,
+        #"function DH(e){let t=(0,$.c)(23),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#,
+        #"function Rq(e){let t=(0,Q.c)(23),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#,
+        #"function Rq(e){let t=(0,Q.c)(21),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#
+    ]
 
     init(params: PatchRuleConfig.RuleParams) {
-        self.primaryAnchors = params.primaryAnchors ?? []
+        self.primaryAnchors = (params.primaryAnchors ?? []) + Self.defaultPrimaryAnchors
         self.fallbackAnchor = params.fallbackAnchor
         self.bridgeExpression = params.bridgeExpression
             ?? "(typeof Wo!==`undefined`?Wo:typeof q!==`undefined`?q:typeof Vf!==`undefined`?Vf:null)"
@@ -235,6 +241,8 @@ struct WebviewPendingRequestRule: PatchRule {
         return files.first { url in
             guard url.pathExtension == "js", let source = try? String(contentsOf: url) else { return false }
             if source.contains(marker) { return true }
+            if primaryAnchors.contains(where: { source.contains($0) }) { return true }
+            if let fallbackAnchor, source.contains(fallbackAnchor) { return true }
             let hasModernAnchor = source.contains("function DH(e)") && source.contains("pendingRequest:a") && source.contains("implementPlan")
             let hasLegacyAnchor = source.contains("function Rq(e)") && source.contains("pendingRequest:a") && source.contains("implementPlan")
             let hasDerivedPendingRequestAnchor = source.contains("if(s&&!s.isCompleted)return{type:`implementPlan`")
