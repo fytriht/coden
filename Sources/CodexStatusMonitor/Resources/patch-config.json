@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-05-07T00:00:00Z",
+  "strategies": [
+    {
+      "id": "strategy-1",
+      "versionRange": { "from": "26.406.0" },
+      "rules": [
+        {
+          "type": "host-mcp-notification-hook",
+          "params": {
+            "functionEntryAnchor": "handleMcpNotification(e){",
+            "messageCaseInsertAnchor": "case\"open-in-browser\":{"
+          }
+        },
+        {
+          "type": "webview-pending-request",
+          "params": {
+            "primaryAnchors": [
+              "function DH(e){let t=(0,$.c)(23),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){",
+              "function Rq(e){let t=(0,Q.c)(23),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){",
+              "function Rq(e){let t=(0,Q.c)(21),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"
+            ],
+            "fallbackAnchor": "if(s&&!s.isCompleted)return{type:`implementPlan`",
+            "bridgeExpression": "(typeof Wo!==`undefined`?Wo:typeof q!==`undefined`?q:typeof Vf!==`undefined`?Vf:null)"
+          }
+        }
+      ]
+    }
+  ]
+}

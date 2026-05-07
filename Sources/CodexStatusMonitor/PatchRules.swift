@@ -34,41 +34,58 @@ struct PatchCheck: Equatable {
 
 protocol PatchRule {
     var name: String { get }
-    func supports(version: CodexVersion) -> Bool
     func check(extension: CodexExtension) throws -> PatchCheck
     func apply(to extension: CodexExtension) throws
     func restore(extension: CodexExtension) throws
 }
 
-final class PatchRuleRegistry {
-    private let rules: [PatchRule]
+// MARK: - Registry
 
-    init(rules: [PatchRule] = [DefaultHostPatchRule(), PendingRequestWebviewPatchRule()]) {
-        self.rules = rules
+final class PatchRuleRegistry {
+    private let config: PatchConfig
+
+    init(config: PatchConfig = PatchConfigLoader.load()) {
+        self.config = config
     }
 
-    func rules(for version: CodexVersion) -> [PatchRule] {
-        rules.filter { $0.supports(version: version) }
+    func rules(for version: CodexVersion) -> [any PatchRule] {
+        config.strategies
+            .filter { $0.versionRange.contains(version) }
+            .flatMap { $0.rules }
+            .compactMap { makeRule($0) }
     }
 
     func isSupported(version: CodexVersion) -> Bool {
         !rules(for: version).isEmpty
     }
+
+    private func makeRule(_ rc: PatchRuleConfig) -> (any PatchRule)? {
+        switch rc.type {
+        case "host-mcp-notification-hook":
+            return HostMcpNotificationHookRule(params: rc.params)
+        case "webview-pending-request":
+            return WebviewPendingRequestRule(params: rc.params)
+        default:
+            return nil
+        }
+    }
 }
 
-struct DefaultHostPatchRule: PatchRule {
-    let name = "default-host-events"
+// MARK: - host-mcp-notification-hook
 
-    private let anchor = #"handleMcpNotification(e){let r=this.extractConversationId(e.params);if(r)switch(e.method){case"codex/event/task_started":this.updateConversationStatus(r,2);break;case"codex/event/task_complete":this.updateConversationStatus(r,1);break;case"codex/event/turn_aborted":case"codex/event/error":case"codex/event/stream_error":this.updateConversationStatus(r,0);break;default:break}}"#
+struct HostMcpNotificationHookRule: PatchRule {
+    let name = "host-mcp-notification-hook"
+
+    private let functionEntryAnchor: String
+    private let messageCaseInsertAnchor: String
+
     private let marker = "__codexStatusMonitorRecord"
     private let helperVersionMarker = "__codexStatusMonitorHelperVersion=3"
     private let messageCaseMarker = #"case"codex-status-monitor-event""#
 
-    func supports(version: CodexVersion) -> Bool {
-        guard let min = CodexVersion("26.406.0"), let max = CodexVersion("26.5429.99999") else {
-            return false
-        }
-        return version >= min && version <= max
+    init(params: PatchRuleConfig.RuleParams) {
+        self.functionEntryAnchor = params.functionEntryAnchor ?? "handleMcpNotification(e){"
+        self.messageCaseInsertAnchor = params.messageCaseInsertAnchor ?? #"case"open-in-browser":{"#
     }
 
     func check(extension ext: CodexExtension) throws -> PatchCheck {
@@ -77,7 +94,7 @@ struct DefaultHostPatchRule: PatchRule {
             && source.contains(helperVersionMarker)
             && source.contains(#"globalThis.__codexStatusMonitorRecord(e)"#)
         let messageCaseInstalled = source.contains(messageCaseMarker)
-        let supported = source.contains(anchor) || source.contains("handleMcpNotification(e){") || installed
+        let supported = source.contains(functionEntryAnchor) || installed
         return PatchCheck(
             supported: supported,
             installed: installed && messageCaseInstalled,
@@ -98,23 +115,22 @@ struct DefaultHostPatchRule: PatchRule {
         }
 
         if !source.contains(#"globalThis.__codexStatusMonitorRecord(e)"#) {
-            let functionAnchor = "handleMcpNotification(e){"
-            guard source.contains(functionAnchor) else { throw PatchError.missingHostAnchor }
+            guard source.contains(functionEntryAnchor) else { throw PatchError.missingHostAnchor }
             source = source.replacingOccurrences(
-                of: functionAnchor,
+                of: functionEntryAnchor,
                 with: #"handleMcpNotification(e){try{globalThis.__codexStatusMonitorRecord(e)}catch{};"#,
                 options: [],
-                range: source.range(of: functionAnchor)
+                range: source.range(of: functionEntryAnchor)
             )
             changed = true
         }
 
         if !source.contains(messageCaseMarker) {
-            guard let openBrowserRange = source.range(of: #"case"open-in-browser":{"#) else {
+            guard let insertionPoint = source.range(of: messageCaseInsertAnchor) else {
                 throw PatchError.missingHostAnchor
             }
             let eventCase = #"case"codex-status-monitor-event":{try{globalThis.__codexStatusMonitorRecord({method:"codex-status-monitor/pending_request",params:r})}catch{};break}"#
-            source.insert(contentsOf: eventCase, at: openBrowserRange.lowerBound)
+            source.insert(contentsOf: eventCase, at: insertionPoint.lowerBound)
             changed = true
         }
 
@@ -135,7 +151,6 @@ struct DefaultHostPatchRule: PatchRule {
 
     private func replacingExistingHelper(in source: String, version: String) -> String {
         let helper = helperSource(version: version)
-        // Match any previously injected helper (v2 file-based or v3 socket-based)
         let startSentinels = [
             ";(()=>{globalThis.__codexStatusMonitorHelperVersion=",
             ";(()=>{if(globalThis.__codexStatusMonitorRecord",
@@ -152,15 +167,21 @@ struct DefaultHostPatchRule: PatchRule {
     }
 }
 
-struct PendingRequestWebviewPatchRule: PatchRule {
-    let name = "version-range-webview-pending-request"
-    private let marker = "codex-status-monitor-event"
+// MARK: - webview-pending-request
 
-    func supports(version: CodexVersion) -> Bool {
-        guard let min = CodexVersion("26.406.0"), let max = CodexVersion("26.5429.99999") else {
-            return false
-        }
-        return version >= min && version <= max
+struct WebviewPendingRequestRule: PatchRule {
+    let name = "webview-pending-request"
+
+    private let marker = "codex-status-monitor-event"
+    private let primaryAnchors: [String]
+    private let fallbackAnchor: String?
+    private let bridgeExpression: String
+
+    init(params: PatchRuleConfig.RuleParams) {
+        self.primaryAnchors = params.primaryAnchors ?? []
+        self.fallbackAnchor = params.fallbackAnchor
+        self.bridgeExpression = params.bridgeExpression
+            ?? "(typeof Wo!==`undefined`?Wo:typeof q!==`undefined`?q:typeof Vf!==`undefined`?Vf:null)"
     }
 
     func check(extension ext: CodexExtension) throws -> PatchCheck {
@@ -180,25 +201,18 @@ struct PendingRequestWebviewPatchRule: PatchRule {
         var source = try read(file)
         guard !source.contains(marker) else { return }
 
-        let bridge = "(typeof Wo!==`undefined`?Wo:typeof q!==`undefined`?q:typeof Vf!==`undefined`?Vf:null)"
+        let bridge = bridgeExpression
         let injected = "try{\(bridge)?.dispatchMessage(`codex-status-monitor-event`,{conversationId:r??null,requestId:a?.item?.requestId??a?.item?.approvalRequestId??a?.requestId??null,type:a?.type??null,itemType:a?.item?.type??null})}catch{};"
 
-        let anchors = [
-            #"function DH(e){let t=(0,$.c)(23),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#,
-            #"function Rq(e){let t=(0,Q.c)(23),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#,
-            #"function Rq(e){let t=(0,Q.c)(21),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#
-        ]
-
-        if let anchor = anchors.first(where: { source.contains($0) }) {
+        if let anchor = primaryAnchors.first(where: { source.contains($0) }) {
             source = source.replacingOccurrences(of: "switch(a.type){", with: injected + "switch(a.type){", options: [], range: source.range(of: anchor))
-        } else if source.contains("if(s&&!s.isCompleted)return{type:`implementPlan`") {
-            let oldAnchor = "if(s&&!s.isCompleted)return{type:`implementPlan`"
+        } else if let fb = fallbackAnchor, source.contains(fb) {
             let oldInjected = "if(s&&!s.isCompleted)return queueMicrotask(()=>{try{\(bridge)?.dispatchMessage(`codex-status-monitor-event`,{conversationId:null,requestId:fo(s.turnId),type:`implementPlan`,itemType:null})}catch{}}),{type:`implementPlan`"
             source = source.replacingOccurrences(
-                of: oldAnchor,
+                of: fb,
                 with: oldInjected,
                 options: [],
-                range: source.range(of: oldAnchor)
+                range: source.range(of: fb)
             )
         } else {
             throw PatchError.missingWebviewAnchor
@@ -228,6 +242,8 @@ struct PendingRequestWebviewPatchRule: PatchRule {
         }
     }
 }
+
+// MARK: - File helpers
 
 func read(_ url: URL) throws -> String {
     guard let source = try? String(contentsOf: url, encoding: .utf8) else {

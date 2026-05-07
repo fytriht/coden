@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         store.onRunningStarted = { [weak self] conversationId in self?.cancelPendingCompletionNotification(conversationId: conversationId) }
         store.onWaitingStarted = { [weak self] conversationId in self?.notifyWaiting(conversationId: conversationId) }
 
+        PatchConfigLoader.refreshInBackground()
         patchStatus = patchInstaller.currentStatus()
         log("Patch status: \(patchStatus.title)")
         startSocketServer()

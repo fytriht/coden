@@ -17,4 +17,8 @@ enum CodexStatusPaths {
     static var logFile: URL {
         appSupportDirectory.appendingPathComponent("app.log")
     }
+
+    static var patchConfigFile: URL {
+        appSupportDirectory.appendingPathComponent("patch-config.json")
+    }
 }

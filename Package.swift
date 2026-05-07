@@ -14,7 +14,8 @@ let package = Package(
         .executableTarget(
             name: "CodexStatusMonitor",
             path: "Sources/CodexStatusMonitor",
-            exclude: ["Resources/Info.plist"]
+            exclude: ["Resources/Info.plist"],
+            resources: [.copy("Resources/patch-config.json")]
         ),
         .testTarget(
             name: "CodexStatusMonitorTests",

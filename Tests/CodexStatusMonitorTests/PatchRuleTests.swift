@@ -28,7 +28,13 @@ final class PatchRuleTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: tempRoot.deletingLastPathComponent()) }
 
         let ext = try makeExtension(root: tempRoot)
-        let rule = DefaultHostPatchRule()
+        let rule = HostMcpNotificationHookRule(params: PatchRuleConfig.RuleParams(
+            functionEntryAnchor: nil,
+            messageCaseInsertAnchor: nil,
+            primaryAnchors: nil,
+            fallbackAnchor: nil,
+            bridgeExpression: nil
+        ))
 
         XCTAssertFalse(try rule.check(extension: ext).installed)
         try rule.apply(to: ext)
