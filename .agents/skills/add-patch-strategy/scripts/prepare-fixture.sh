@@ -17,7 +17,7 @@ let candidates = [];
 try {
   for (const entry of fs.readdirSync(dir)) {
     if (!entry.startsWith("openai.chatgpt-")) continue;
-    const root = path.join(dir, entry, "extension");
+    const root = path.join(dir, entry);
     const pkg = path.join(root, "package.json");
     const host = path.join(root, "out", "extension.js");
     if (!fs.existsSync(pkg) || !fs.existsSync(host)) continue;
@@ -53,7 +53,7 @@ if [[ $# -eq 1 ]]; then
 else
   root="$(default_extension_root)"
   if [[ -z "$root" ]]; then
-    echo "error: no installed Codex extension found under ~/.vscode/extensions/openai.chatgpt-*/extension" >&2
+    echo "error: no installed Codex extension found under ~/.vscode/extensions/openai.chatgpt-*" >&2
     echo "       pass an explicit extension root if the extension is installed elsewhere" >&2
     exit 1
   fi

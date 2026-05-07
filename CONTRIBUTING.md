@@ -72,7 +72,7 @@ In Claude Code, the same skill is available as:
 /add-patch-strategy upgrade the patch strategy
 ```
 
-By default, the skill reads the newest installed extension under `~/.vscode/extensions/openai.chatgpt-*/extension`. Include an explicit extension root path only when testing an unpacked extension from another location.
+By default, the skill reads the newest installed extension under `~/.vscode/extensions/openai.chatgpt-*`. Include an explicit extension root path only when testing an unpacked extension from another location.
 
 The skill source lives in `.agents/skills/add-patch-strategy` and is exposed to Claude Code through a project-level symlink:
 

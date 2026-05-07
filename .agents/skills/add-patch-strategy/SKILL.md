@@ -23,7 +23,7 @@ In Claude Code, ask from this repository:
 /add-patch-strategy 升级 patch 策略
 ```
 
-By default, use the newest installed extension under `~/.vscode/extensions/openai.chatgpt-*/extension`. If slash invocation is unavailable, use a natural-language request that mentions `add-patch-strategy`.
+By default, use the newest installed extension under `~/.vscode/extensions/openai.chatgpt-*`. If slash invocation is unavailable, use a natural-language request that mentions `add-patch-strategy`.
 
 If the extension is installed somewhere else, include the explicit extension root path in the request.
 
@@ -45,12 +45,12 @@ You can also run the bundled helper scripts directly for inspection:
 
 ## Inputs
 
-Default to the newest local extension directory matching `~/.vscode/extensions/openai.chatgpt-*/extension`. The root must contain `package.json` and `out/extension.js`.
+Default to the newest local extension directory matching `~/.vscode/extensions/openai.chatgpt-*`. The root must contain `package.json` and `out/extension.js`.
 
 Common locations:
 
 ```bash
-~/.vscode/extensions/openai.chatgpt-*/extension
+~/.vscode/extensions/openai.chatgpt-*
 Tests/Fixtures/vsix/openai.chatgpt-*/extension
 ```
 
@@ -59,7 +59,7 @@ If the user provides a VSIX instead, unpack it first, then continue with the unp
 ## Workflow
 
 1. Run `git status --short` first. Do not modify staged state unless the user explicitly asks.
-2. Identify the extension root. If the user did not provide one, use the newest `~/.vscode/extensions/openai.chatgpt-*/extension`.
+2. Identify the extension root. If the user did not provide one, use the newest `~/.vscode/extensions/openai.chatgpt-*`.
 3. Identify the extension version from `package.json`.
 4. Run `scripts/analyze-extension.sh` from this skill to inspect the default newest extension, or pass `<extension-root>` when using an explicit path:
    - host entry anchors in `out/extension.js`
