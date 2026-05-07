@@ -60,6 +60,34 @@ Current rule types:
 - `DefaultHostPatchRule`
 - `PendingRequestWebviewPatchRule`
 
+For agent-assisted upgrades, use the shared `add-patch-strategy` skill:
+
+```text
+Use add-patch-strategy to upgrade the patch strategy.
+```
+
+In Claude Code, the same skill is available as:
+
+```text
+/add-patch-strategy upgrade the patch strategy
+```
+
+By default, the skill reads the newest installed extension under `~/.vscode/extensions/openai.chatgpt-*/extension`. Include an explicit extension root path only when testing an unpacked extension from another location.
+
+The skill source lives in `.agents/skills/add-patch-strategy` and is exposed to Claude Code through a project-level symlink:
+
+- `.agents/skills/add-patch-strategy` is the primary Codex project skill directory.
+- `.claude/skills/add-patch-strategy` points to the same source for Claude Code.
+
+Its helper scripts can be run directly:
+
+```bash
+.agents/skills/add-patch-strategy/scripts/analyze-extension.sh
+.agents/skills/add-patch-strategy/scripts/prepare-fixture.sh
+```
+
+`analyze-extension.sh` is read-only. `prepare-fixture.sh` creates or refreshes the minimal fixture under `Tests/Fixtures/vsix`. Both scripts accept an optional explicit extension root path.
+
 When a new VS Code extension version changes structure enough to break patching:
 
 1. Add the unpacked VSIX or extension directory under `Tests/Fixtures/vsix`.
