@@ -179,6 +179,7 @@ struct WebviewPendingRequestRule: PatchRule {
     private static let defaultPrimaryAnchors = [
         #"function dH(e){let t=(0,$.c)(23),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#,
         #"function DH(e){let t=(0,$.c)(23),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#,
+        #"function XW(e){let t=(0,$.c)(23),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#,
         #"function Rq(e){let t=(0,Q.c)(23),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#,
         #"function Rq(e){let t=(0,Q.c)(21),{approvalQuestionActor:n,conversationId:r,hostId:i,pendingRequest:a,onSubmitLocalFollowup:o}=e;switch(a.type){"#
     ]
@@ -187,7 +188,7 @@ struct WebviewPendingRequestRule: PatchRule {
         self.primaryAnchors = (params.primaryAnchors ?? []) + Self.defaultPrimaryAnchors
         self.fallbackAnchor = params.fallbackAnchor
         self.bridgeExpression = params.bridgeExpression
-            ?? "(typeof Wo!==`undefined`?Wo:typeof q!==`undefined`?q:typeof Vf!==`undefined`?Vf:null)"
+            ?? "(typeof Wo!==`undefined`?Wo:typeof q!==`undefined`?q:typeof Vf!==`undefined`?Vf:typeof li!==`undefined`?li:typeof ui!==`undefined`?ui.getInstance():null)"
     }
 
     func check(extension ext: CodexExtension) throws -> PatchCheck {

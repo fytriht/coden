@@ -45,6 +45,40 @@ final class PatchRuleTests: XCTestCase {
         XCTAssertEqual(once, twice)
     }
 
+    func testLatestFixturePatchIsIdempotentOnTemporaryCopy() throws {
+        let sourceRoot = try XCTUnwrap(fixtureExtensionRoots().first {
+            $0.path.contains("openai.chatgpt-26.506.21252-local")
+        })
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("codex-status-monitor-tests-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("extension", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: sourceRoot, to: tempRoot)
+        defer { try? FileManager.default.removeItem(at: tempRoot.deletingLastPathComponent()) }
+
+        let ext = try makeExtension(root: tempRoot)
+        let rules = PatchRuleRegistry().rules(for: ext.version)
+        XCTAssertFalse(rules.isEmpty)
+
+        for rule in rules {
+            try rule.apply(to: ext)
+            XCTAssertTrue(try rule.check(extension: ext).installed, "\(rule.name) did not install")
+        }
+
+        let hostOnce = try String(contentsOf: ext.extensionHost)
+        let webviewFiles = try FileManager.default.contentsOfDirectory(at: ext.webviewAssets, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "js" }
+            .sorted { $0.path < $1.path }
+        let webviewOnce = try webviewFiles.map { try String(contentsOf: $0) }
+
+        for rule in rules {
+            try rule.apply(to: ext)
+        }
+
+        XCTAssertEqual(hostOnce, try String(contentsOf: ext.extensionHost))
+        XCTAssertEqual(webviewOnce, try webviewFiles.map { try String(contentsOf: $0) })
+    }
+
     private func fixtureExtensionRoots() throws -> [URL] {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("Tests/Fixtures/vsix", isDirectory: true)
